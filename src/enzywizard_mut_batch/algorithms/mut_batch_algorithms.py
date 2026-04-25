@@ -17,7 +17,7 @@ from ..utils.IO_utils import (
     load_sdf_mol_3d,
     structure_to_pdbfile,
 )
-from ..utils.batch_utils import build_batch_output_paths
+from ..utils.batch_utils import build_batch_output_paths, build_identity_clean_mapping_from_structure
 from ..utils.mut_batch_utils import (
     copy_substrate_sdf_files
 )
@@ -37,10 +37,8 @@ from ..algorithms.mut_clean_algorithms import (
 )
 
 from ..algorithms.clean_algorithms import (
-    clean_structure_to_single_chain_A,
     generate_clean_report,
     check_cleaned_structure,
-    validate_clean_mapping_coordinates,
 )
 from ..algorithms.aaprops_algorithms import (
     calculate_aa_props,
@@ -146,14 +144,6 @@ def _run_mut_batch_side_workflow(
             and substrate_dir is not None
     )
 
-    if not check_cleaned_structure(cleaned_structure, logger):
-        logger.print(f"[ERROR] Cleaned structure failed validation: {protein_name}")
-        return None
-
-    if not structure_has_hydrogen(cleaned_structure, logger):
-        logger.print(f"[ERROR] Cleaned structure does not contain hydrogen atoms: {protein_name}")
-        return None
-
     cleaned_pdbfile = structure_to_pdbfile(cleaned_structure, logger, protein_name=protein_name)
     if cleaned_pdbfile is None:
         return None
@@ -197,9 +187,6 @@ def _run_mut_batch_side_workflow(
     report_dict["enzywizard_hydrocluster"] = hydrocluster_report
 
     logger.print(f"[INFO] Energy calculation started: {protein_name}")
-    cleaned_pdbfile = structure_to_pdbfile(cleaned_structure, logger, protein_name=protein_name)
-    if cleaned_pdbfile is None:
-        return None
 
     energy_terms = compute_energy_terms(
         struct=cleaned_pdbfile,
@@ -543,56 +530,19 @@ def run_mut_batch_workflow(
     ):
         return None
 
-    wt_clean_result = clean_structure_to_single_chain_A(wt_structure, logger)
-    if wt_clean_result is None:
+    wt_identity_result = build_identity_clean_mapping_from_structure(wt_structure, logger)
+    if wt_identity_result is None:
         return None
-    wt_cleaned_structure, wt_mapping_old_to_new, wt_clean_stats = wt_clean_result
+    wt_mapping_old_to_new, wt_clean_stats = wt_identity_result
 
-    mut_clean_result = clean_structure_to_single_chain_A(mut_structure, logger)
-    if mut_clean_result is None:
+    mut_identity_result = build_identity_clean_mapping_from_structure(mut_structure, logger)
+    if mut_identity_result is None:
         return None
-    mut_cleaned_structure, mut_mapping_old_to_new, mut_clean_stats = mut_clean_result
+    mut_mapping_old_to_new, mut_clean_stats = mut_identity_result
 
-    if not check_cleaned_structure(wt_cleaned_structure, logger):
-        return None
+    wt_cleaned_structure = wt_structure
+    mut_cleaned_structure = mut_structure
 
-    if not check_cleaned_structure(mut_cleaned_structure, logger):
-        return None
-
-    if not validate_clean_mapping_coordinates(
-        wt_structure, wt_cleaned_structure, wt_mapping_old_to_new, logger
-    ):
-        return None
-
-    if not validate_clean_mapping_coordinates(
-        mut_structure, mut_cleaned_structure, mut_mapping_old_to_new, logger
-    ):
-        return None
-
-    if not structure_has_hydrogen(wt_cleaned_structure, logger):
-        logger.print("[ERROR] WT structure does not contain hydrogen atoms.")
-        return None
-
-    if not structure_has_hydrogen(mut_cleaned_structure, logger):
-        logger.print("[ERROR] MUT structure does not contain hydrogen atoms.")
-        return None
-
-    wt_cleaned_chain = get_single_chain(wt_cleaned_structure, logger)
-    mut_cleaned_chain = get_single_chain(mut_cleaned_structure, logger)
-    if wt_cleaned_chain is None or mut_cleaned_chain is None:
-        return None
-
-    wt_cleaned_length = get_chain_length(wt_cleaned_chain, logger)
-    mut_cleaned_length = get_chain_length(mut_cleaned_chain, logger)
-    if wt_cleaned_length is None or mut_cleaned_length is None:
-        return None
-
-    if wt_cleaned_length != mut_cleaned_length:
-        logger.print(
-            f"[ERROR] Cleaned WT and MUT sequence lengths are not equal: "
-            f"{wt_cleaned_length} vs {mut_cleaned_length}"
-        )
-        return None
 
     cleaned_amino_acid_substitution = get_cleaned_amino_acid_substitution(
         wt_mapping_old_to_new=wt_mapping_old_to_new,
