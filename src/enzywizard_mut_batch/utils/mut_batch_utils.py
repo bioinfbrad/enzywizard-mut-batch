@@ -191,14 +191,14 @@ def save_mut_batch_integrate_outputs(
         return False
     logger.print(f"[INFO] Mut_integrate report JSON saved: {mut_report_path}")
 
-    wt_integrated_graph = mut_integrate_report.get("wt_integrated_graph")
+    wt_integrated_graph = mut_integrate_report.get("wild_type_integrated_graph")
     if not isinstance(wt_integrated_graph, list):
-        logger.print("[ERROR] wt_integrated_graph missing in mut_batch integrate report.")
+        logger.print("[ERROR] wild_type_integrated_graph missing in mut_batch integrate report.")
         return False
 
-    mut_integrated_graph = mut_integrate_report.get("mut_integrated_graph")
+    mut_integrated_graph = mut_integrate_report.get("mutant_integrated_graph")
     if not isinstance(mut_integrated_graph, list):
-        logger.print("[ERROR] mut_integrated_graph missing in mut_batch integrate report.")
+        logger.print("[ERROR] mutant_integrated_graph missing in mut_batch integrate report.")
         return False
 
     wt_split_result = split_integrated_graph_entries(wt_integrated_graph, logger)
