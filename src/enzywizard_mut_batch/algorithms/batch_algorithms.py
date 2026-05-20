@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, List
 from openmm.app import Modeller
 
 from ..utils.logging_utils import Logger
@@ -76,6 +76,9 @@ def run_batch_workflow(
     dock_min_rad: float = 1.8,
     dock_max_rad: float = 6.2,
     dock_min_volume: int = 50,
+    dock_catalytic_residue: int | None = None,
+    dock_catalytic_site_coord_list: List[float] | None = None,
+    dock_box_size_list: List[float] | None = None,
     bonded_h_min_distance_A: float = 0.8,
     bonded_h_max_distance_A: float = 1.3,
     da_max_distance_A: float = 3.9,
@@ -329,6 +332,9 @@ def run_batch_workflow(
             min_rad=dock_min_rad,
             max_rad=dock_max_rad,
             min_volume=dock_min_volume,
+            catalytic_residue=dock_catalytic_residue,
+            catalytic_site_coord_list=dock_catalytic_site_coord_list,
+            manual_box_size_list=dock_box_size_list,
         )
         if docking_result_list is None:
             return None

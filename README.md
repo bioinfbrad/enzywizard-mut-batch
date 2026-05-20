@@ -75,6 +75,9 @@ wild-type and mutant sides:
 - protein-substrate interaction calculation
 - strict mutation-aware graph integration
 
+If substrate generation or docking fails on either side, these additional workflows
+are skipped and the program continues with paired protein-only analysis.
+
 If not provided, substrate, docking, and protein-substrate interaction steps
 will be skipped on both sides.
 
@@ -211,6 +214,44 @@ Default: 16.
 Optional.
 Number of CPUs used by AutoDock Vina.
 Default: 0.
+
+--dock_catalytic_residue
+Optional.
+Cleaned protein residue index used as the docking box center.
+
+Example:
+  121
+
+This parameter is an integer residue index from the cleaned single-chain protein
+structure. The CA atom coordinate of this residue is used as the docking box
+center. When this parameter is provided, --dock_box_size is required.
+This parameter cannot be used together with --dock_catalytic_site_coord.
+When this parameter is provided, the docking step does not use PyVOL pocket
+detection or the global docking box fallback to build Vina docking boxes.
+
+--dock_catalytic_site_coord
+Optional.
+Catalytic site center coordinate separated by ','.
+
+Example:
+  12.5,8.0,-3.2
+
+When this parameter is provided, the same coordinate is used as the docking box
+center on both wild-type and mutant sides, and --dock_box_size is required.
+This parameter cannot be used together with --dock_catalytic_residue.
+When this parameter is provided, the docking step does not use PyVOL pocket
+detection or the global docking box fallback to build Vina docking boxes.
+
+--dock_box_size
+Optional.
+Docking box size separated by ','.
+
+Example:
+  20,20,20
+
+This parameter is required when --dock_catalytic_residue or
+--dock_catalytic_site_coord is provided. All three values must be positive
+numbers.
 
 --hbond_bonded_h_min_distance
 Optional.
@@ -1331,6 +1372,9 @@ This command processes the input wild-type and mutant systems as follows:
    - Save substrate structure files to the wild-type output directory.
    - Copy substrate SDF files to the mutant output directory.
    - Generate one shared enzywizard_substrate report for both sides.
+   - If substrate parsing, SMILES completion, conformer generation, structure saving,
+     SDF copying, or report generation fails, log a warning and continue with paired
+     protein-only analysis.
 
 10. Run wild-type side workflow
    - Prepare OpenMM and sequence objects.
@@ -1343,6 +1387,10 @@ This command processes the input wild-type and mutant systems as follows:
    - Run embedding analysis.
    - Run pocket analysis.
    - Optionally run docking analysis using wild-type substrate SDF files.
+   - In manual docking box mode, use --dock_catalytic_residue or --dock_catalytic_site_coord with --dock_box_size and skip docking-specific PyVOL pocket detection and the global docking box fallback.
+   - In automatic docking box mode, use automatically generated pocket and global fallback docking boxes.
+   - If wild-type docking cannot complete, continue this side as protein-only and
+     run the mutant side as protein-only.
    - Run interaction analysis.
    - Build the wild-type report dictionary.
 
@@ -1357,14 +1405,20 @@ This command processes the input wild-type and mutant systems as follows:
    - Run embedding analysis.
    - Run pocket analysis.
    - Optionally run docking analysis using mutant substrate SDF files.
+   - In manual docking box mode, use --dock_catalytic_residue or --dock_catalytic_site_coord with --dock_box_size and skip docking-specific PyVOL pocket detection and the global docking box fallback.
+   - In automatic docking box mode, use automatically generated pocket and global fallback docking boxes.
+   - If mutant docking cannot complete after wild-type docking succeeded, re-run the
+     wild-type side as protein-only so both sides are integrated consistently.
    - Run interaction analysis.
    - Build the mutant report dictionary.
 
 12. Run mutation-aware graph integration
    - Pass the enzywizard_mut_clean report, wild-type report dictionary, and mutant report
      dictionary into the mutation integration algorithm.
-   - Use strict integration when substrate input is provided.
-   - Use non-strict integration when no substrate input is provided.
+   - Use strict integration when substrate input is provided and substrate/docking
+     workflows complete successfully on both sides.
+   - Use non-strict integration when no substrate input is provided or the workflow
+     falls back to paired protein-only analysis.
    - Generate paired wild-type and mutant integrated graph representations.
 
 13. Save mutation-integrated outputs
