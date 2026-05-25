@@ -23,7 +23,7 @@ machine learning, and mutation effect studies.
 
 Example command:
 
-enzywizard-mut-batch -w examples/input/cleaned_1ZG4_WT.cif -m examples/input/cleaned_1ZG6_S70G.cif -wm examples/input/jhmm_1ZG4_WT.sto -mm examples/input/jhmm_1ZG6_S70G.sto -a S45G -s glucose,fructose -wo examples/wt_output/ -mo examples/mut_output/
+enzywizard-mut-batch -w examples/input/cleaned_1ZG4_WT.cif -m examples/input/cleaned_1ZG6_S70G.cif -wm examples/input/jhmm_1ZG4_WT.sto -mm examples/input/jhmm_1ZG6_S70G.sto -a S45G -s "glucose;fructose" -wo examples/wt_output/ -mo examples/mut_output/
 
 
 # input parameters:
@@ -59,13 +59,13 @@ Path to the input mutant MSA file.
 
 -a, --cleaned_amino_acid_substitution
 Required.
-Input cleaned amino acid substitution in mutation format, such as A123V.
+Input cleaned amino acid substitution in mutation format, such as A123V or A123V;G456D.
 
 -s, --substrate_names
 Optional.
 Substrate names or SMILES strings.
 
-Multiple substrates should be separated by ','.
+Multiple substrates should be separated by ';'.
 
 If provided, the following additional workflows will be executed on both
 wild-type and mutant sides:

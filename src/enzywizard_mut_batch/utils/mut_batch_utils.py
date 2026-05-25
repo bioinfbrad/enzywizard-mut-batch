@@ -102,7 +102,7 @@ def copy_substrate_sdf_files(
         logger.print(f"[ERROR] Invalid substrate source_dir: {source_dir}")
         return False
 
-    substrate_name_list = [x.strip() for x in resolved_substrate_names.split(",") if x.strip()]
+    substrate_name_list = [x.strip() for x in resolved_substrate_names.split(";") if x.strip()]
     if len(substrate_name_list) == 0:
         logger.print("[ERROR] substrate_names is empty after parsing.")
         return False

@@ -653,7 +653,7 @@ def run_mut_batch_workflow(
             effective_has_substrate = False
 
     if effective_has_substrate:
-        resolved_substrate_names = ",".join(item["substrate_name"] for item in substrate_dict_list)
+        resolved_substrate_names = ";".join(item["substrate_name"] for item in substrate_dict_list)
 
         if not save_substrate_structures(substrate_feature_list, wt_output_dir, logger):
             logger.print("[WARNING] Saving substrate structures to WT side failed. Falling back to protein-only workflow on both sides.")
