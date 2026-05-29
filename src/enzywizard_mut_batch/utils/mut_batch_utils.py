@@ -102,7 +102,7 @@ def copy_substrate_sdf_files(
         logger.print(f"[ERROR] Invalid substrate source_dir: {source_dir}")
         return False
 
-    substrate_name_list = [x.strip() for x in resolved_substrate_names.split(";") if x.strip()]
+    substrate_name_list = [x.strip() for x in resolved_substrate_names.split(",") if x.strip()]
     if len(substrate_name_list) == 0:
         logger.print("[ERROR] substrate_names is empty after parsing.")
         return False
@@ -117,14 +117,18 @@ def copy_substrate_sdf_files(
             logger.print("[ERROR] Invalid substrate_name in substrate_names.")
             return False
         substrate_name = substrate_name.strip()
+        substrate_file_stem = get_optimized_filename(substrate_name)
+        if not substrate_file_stem:
+            logger.print(f"[ERROR] Invalid substrate filename generated from substrate: {substrate_name}")
+            return False
 
         matched_files = []
 
-        single_path = source_dir / f"{substrate_name}.sdf"
+        single_path = source_dir / f"{substrate_file_stem}.sdf"
         if single_path.exists() and single_path.is_file():
             matched_files.append(single_path)
 
-        matched_files.extend(sorted(source_dir.glob(f"{substrate_name}_*.sdf")))
+        matched_files.extend(sorted(source_dir.glob(f"{substrate_file_stem}_*.sdf")))
 
         unique_matched_files = []
         seen_resolved = set()
