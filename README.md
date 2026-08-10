@@ -48,7 +48,7 @@ Path to the input wild-type MSA file.
 
 Supported MSA formats include:
 - Stockholm (.sto)
-- aligned FASTA
+- aligned FASTA (.fa / .fasta / .afa / .fasta.gz)
 - A3M
 
 The MSA must be generated using the wild-type cleaned protein FASTA sequence.
@@ -56,6 +56,11 @@ The MSA must be generated using the wild-type cleaned protein FASTA sequence.
 -mm, --mut_input_msa
 Required.
 Path to the input mutant MSA file.
+
+Supported MSA formats include:
+- Stockholm (.sto)
+- aligned FASTA (.fa / .fasta / .afa / .fasta.gz)
+- A3M
 
 -a, --cleaned_amino_acid_substitution
 Required.
@@ -1506,6 +1511,7 @@ This command processes the input wild-type and mutant systems as follows:
    - Run flexibility analysis.
    - Run disorder analysis.
    - Run conservation analysis using the wild-type MSA.
+   - Automatically decompress the wild-type MSA when the file is in .fasta.gz format.
    - Run embedding analysis.
    - Run pocket analysis.
    - Optionally run docking analysis using wild-type substrate SDF files.
@@ -1524,6 +1530,7 @@ This command processes the input wild-type and mutant systems as follows:
    - Run flexibility analysis.
    - Run disorder analysis.
    - Run conservation analysis using the mutant MSA.
+   - Automatically decompress the mutant MSA when the file is in .fasta.gz format.
    - Run embedding analysis.
    - Run pocket analysis.
    - Optionally run docking analysis using mutant substrate SDF files.
