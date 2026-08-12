@@ -904,4 +904,3 @@ def postprocess_conservation_report_to_schema(
         "report_type": raw_report.get("output_type"),
         "sequence_conservation_scores": sequence_conservation_scores,
     }
-
