@@ -1202,19 +1202,6 @@
       "interaction_count": 1
     },
     "source_node": {
-      "node_index": 45
-    },
-    "target_node": {
-      "node_index": 264
-    }
-  },
-  {
-    "molecular_interaction": {
-      "molecular_interaction_type": "HBOND",
-      "molecular_interaction_one_hot_encoding": [1, 0, 0, 0, 0, 0],
-      "interaction_count": 1
-    },
-    "source_node": {
       "node_index": 46
     },
     "target_node": {
@@ -2557,7 +2544,7 @@
       "node_index": 105
     },
     "target_node": {
-      "node_index": 264
+      "node_index": 265
     }
   },
   {
@@ -2623,19 +2610,6 @@
     },
     "target_node": {
       "node_index": 141
-    }
-  },
-  {
-    "molecular_interaction": {
-      "molecular_interaction_type": "HBOND",
-      "molecular_interaction_one_hot_encoding": [1, 0, 0, 0, 0, 0],
-      "interaction_count": 1
-    },
-    "source_node": {
-      "node_index": 107
-    },
-    "target_node": {
-      "node_index": 264
     }
   },
   {
@@ -4538,6 +4512,19 @@
   },
   {
     "molecular_interaction": {
+      "molecular_interaction_type": "VDW",
+      "molecular_interaction_one_hot_encoding": [0, 0, 1, 0, 0, 0],
+      "interaction_count": 1
+    },
+    "source_node": {
+      "node_index": 210
+    },
+    "target_node": {
+      "node_index": 265
+    }
+  },
+  {
+    "molecular_interaction": {
       "molecular_interaction_type": "HBOND",
       "molecular_interaction_one_hot_encoding": [1, 0, 0, 0, 0, 0],
       "interaction_count": 1
@@ -4611,7 +4598,7 @@
       "node_index": 212
     },
     "target_node": {
-      "node_index": 265
+      "node_index": 264
     }
   },
   {

@@ -24,16 +24,16 @@ def _parse_float_triplet(value: str, parameter_name: str, logger: Logger) -> Lis
 
     try:
         return [float(x) for x in part_list]
-    except Exception:
-        logger.print(f"[ERROR] {parameter_name} must contain numeric values.")
+    except Exception as e:
+        logger.print(f"[ERROR] {parameter_name} must contain numeric values. Reason: {e}")
         return None
 
 
 def run_mut_batch_service(
     wt_cleaned_input_path: str | Path,
     mut_cleaned_input_path: str | Path,
-    wt_input_msa: str | Path,
-    mut_input_msa: str | Path,
+    wt_input_msa: str | Path | None,
+    mut_input_msa: str | Path | None,
     amino_acid_substitution: str,
     substrate_names: str | None,
     wt_output_dir: str | Path,
@@ -41,7 +41,7 @@ def run_mut_batch_service(
     save_extra_outputs: bool = False,
     cutoff_area: float = 10.0,
     minimize_energy: bool = True,
-    minimization_iteration: int = 1000,
+    minimization_iteration: int = 100,
     energy_force_field_file: str = "charmm36.xml",
     flexibility_cutoff: float = 15.0,
     n_modes: int = 20,
@@ -58,8 +58,8 @@ def run_mut_batch_service(
     num_confs: int = 5,
     prune_rms: float = 0.5,
     max_docking_attempt_num: int = 20,
-    early_stop: bool = False,
-    exhaustiveness: int = 16,
+    early_stop: bool = True,
+    exhaustiveness: int = 8,
     cpu: int = 0,
     dock_min_rad: float = 1.8,
     dock_max_rad: float = 6.2,
@@ -83,8 +83,10 @@ def run_mut_batch_service(
 ) -> bool:
     wt_cleaned_input_path = Path(wt_cleaned_input_path)
     mut_cleaned_input_path = Path(mut_cleaned_input_path)
-    wt_input_msa = Path(wt_input_msa)
-    mut_input_msa = Path(mut_input_msa)
+    has_wt_msa = wt_input_msa is not None and str(wt_input_msa).strip() != ""
+    has_mut_msa = mut_input_msa is not None and str(mut_input_msa).strip() != ""
+    wt_input_msa_path = Path(wt_input_msa) if has_wt_msa else None
+    mut_input_msa_path = Path(mut_input_msa) if has_mut_msa else None
     wt_output_dir = Path(wt_output_dir)
     mut_output_dir = Path(mut_output_dir)
 
@@ -93,6 +95,9 @@ def run_mut_batch_service(
 
     tmp_wt_dir_ctx: TemporaryDirectory | None = None
     tmp_mut_dir_ctx: TemporaryDirectory | None = None
+    logger: Logger | None = None
+    wt_working_output_dir: Path | None = None
+    mut_working_output_dir: Path | None = None
 
     try:
         if not save_extra_outputs:
@@ -112,12 +117,16 @@ def run_mut_batch_service(
             f"[INFO] Mut_batch processing started: "
             f"wt_cleaned_input_path={wt_cleaned_input_path}, "
             f"mut_cleaned_input_path={mut_cleaned_input_path}, "
-            f"wt_input_msa={wt_input_msa}, "
-            f"mut_input_msa={mut_input_msa}, "
+            f"wt_input_msa={wt_input_msa_path}, "
+            f"mut_input_msa={mut_input_msa_path}, "
             f"substrate_names={substrate_names}, "
             f"amino_acid_substitution={amino_acid_substitution}"
         )
 
+        if not has_wt_msa:
+            logger.print("[INFO] No WT MSA input detected. WT conservation analysis and HMM output will be skipped.")
+        if not has_mut_msa:
+            logger.print("[INFO] No MUT MSA input detected. MUT conservation analysis and HMM output will be skipped.")
         if has_substrate:
             logger.print("[INFO] Substrate input detected. Full mut_batch workflow will be executed.")
 
@@ -162,13 +171,15 @@ def run_mut_batch_service(
             logger.print(f"[ERROR] MUT cleaned input file not found: {mut_cleaned_input_path}")
             return False
 
-        if not file_exists(wt_input_msa):
-            logger.print(f"[ERROR] WT input MSA file not found: {wt_input_msa}")
-            return False
+        if has_wt_msa:
+            if wt_input_msa_path is None or not file_exists(wt_input_msa_path):
+                logger.print(f"[ERROR] WT input MSA file not found: {wt_input_msa_path}")
+                return False
 
-        if not file_exists(mut_input_msa):
-            logger.print(f"[ERROR] MUT input MSA file not found: {mut_input_msa}")
-            return False
+        if has_mut_msa:
+            if mut_input_msa_path is None or not file_exists(mut_input_msa_path):
+                logger.print(f"[ERROR] MUT input MSA file not found: {mut_input_msa_path}")
+                return False
 
         if wt_output_dir.resolve() == mut_output_dir.resolve():
             logger.print("[ERROR] wt_output_dir and mut_output_dir must be different directories.")
@@ -192,20 +203,25 @@ def run_mut_batch_service(
             )
             return False
 
-        wt_msa_name = get_stem(wt_input_msa)
-        if not check_filename_length(wt_msa_name, logger):
-            return False
+        wt_msa_name = None
+        if has_wt_msa:
+            wt_msa_name = get_stem(wt_input_msa_path)
+            if not check_filename_length(wt_msa_name, logger):
+                return False
 
-        mut_msa_name = get_stem(mut_input_msa)
-        if not check_filename_length(mut_msa_name, logger):
-            return False
+        mut_msa_name = None
+        if has_mut_msa:
+            mut_msa_name = get_stem(mut_input_msa_path)
+            if not check_filename_length(mut_msa_name, logger):
+                return False
 
         logger.print(
             f"[INFO] Protein names resolved: wt={wt_protein_name}, mut={mut_protein_name}"
         )
-        logger.print(
-            f"[INFO] MSA names resolved: wt={wt_msa_name}, mut={mut_msa_name}"
-        )
+        if has_wt_msa:
+            logger.print(f"[INFO] WT MSA file name resolved: {wt_msa_name}")
+        if has_mut_msa:
+            logger.print(f"[INFO] MUT MSA file name resolved: {mut_msa_name}")
 
 
         if not validate_mut_batch_parameter_ranges(
@@ -250,8 +266,8 @@ def run_mut_batch_service(
         batch_result = run_mut_batch_workflow(
             wt_cleaned_input_path=wt_cleaned_input_path,
             mut_cleaned_input_path=mut_cleaned_input_path,
-            wt_input_msa=wt_input_msa,
-            mut_input_msa=mut_input_msa,
+            wt_input_msa=wt_input_msa_path,
+            mut_input_msa=mut_input_msa_path,
             substrate_names=substrate_names,
             amino_acid_substitution=amino_acid_substitution,
             wt_protein_name=wt_protein_name,
@@ -354,6 +370,25 @@ def run_mut_batch_service(
                 return False
 
         return True
+
+    except Exception as e:
+        if logger is not None:
+            logger.print(f"[ERROR] Mut_batch processing failed: {e}")
+        else:
+            fallback_logger = Logger(wt_output_dir)
+            fallback_logger.print(f"[ERROR] Mut_batch processing failed before workflow logging was initialized: {e}")
+
+        if wt_working_output_dir is not None:
+            log_path = wt_working_output_dir / "log.txt"
+            if log_path.exists():
+                try:
+                    if not save_extra_outputs:
+                        shutil.copy2(log_path, wt_output_dir / "log.txt")
+                    shutil.copy2(log_path, mut_output_dir / "log.txt")
+                except Exception as copy_error:
+                    if logger is not None:
+                        logger.print(f"[ERROR] Failed to preserve log.txt after mut_batch failure: {copy_error}")
+        return False
 
     finally:
         if tmp_wt_dir_ctx is not None:

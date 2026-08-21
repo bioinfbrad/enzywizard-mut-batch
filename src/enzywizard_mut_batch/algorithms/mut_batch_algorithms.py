@@ -88,9 +88,9 @@ from ..algorithms.mut_integrate_algorithms import integrate_mut_reports
 def _run_mut_batch_side_workflow(
     cleaned_structure: Structure,
     clean_report: Dict[str, Any],
-    input_msa: str | Path,
+    input_msa: str | Path | None,
     protein_name: str,
-    msa_name: str,
+    msa_name: str | None,
     output_dir: str | Path,
     substrate_names: str | None,
     substrate_report: Dict[str, Any] | None,
@@ -98,7 +98,7 @@ def _run_mut_batch_side_workflow(
     logger: Logger,
     cutoff_area: float = 10.0,
     minimize_energy: bool = True,
-    minimization_iteration: int = 1000,
+    minimization_iteration: int = 100,
     energy_force_field_file: str = "charmm36.xml",
     flexibility_cutoff: float = 15.0,
     n_modes: int = 20,
@@ -110,8 +110,8 @@ def _run_mut_batch_side_workflow(
     pocket_max_rad: float = 6.2,
     pocket_min_volume: int = 50,
     max_docking_attempt_num: int = 20,
-    early_stop: bool = False,
-    exhaustiveness: int = 16,
+    early_stop: bool = True,
+    exhaustiveness: int = 8,
     cpu: int = 0,
     dock_min_rad: float = 1.8,
     dock_max_rad: float = 6.2,
@@ -133,7 +133,8 @@ def _run_mut_batch_side_workflow(
     docked_heavy_atom_distance_cutoff_A: float = 6.5,
     min_residue_index_gap: int = 3,
 ) -> Dict[str, Dict[str, Any]] | None:
-    input_msa = Path(input_msa)
+    has_msa = input_msa is not None and str(input_msa).strip() != ""
+    input_msa_path = Path(input_msa) if has_msa else None
     output_dir = Path(output_dir)
     substrate_dir = Path(substrate_dir) if substrate_dir is not None else None
 
@@ -236,34 +237,37 @@ def _run_mut_batch_side_workflow(
         return None
     report_dict["enzywizard_disorder"] = disorder_report
 
-    logger.print(f"[INFO] Conservation calculation started: {protein_name}")
-    msa_list = load_msa(input_msa, logger)
-    if msa_list is None:
-        return None
+    if has_msa:
+        logger.print(f"[INFO] Conservation calculation started: {protein_name}")
+        msa_list = load_msa(input_msa_path, logger)
+        if msa_list is None:
+            return None
 
-    if not check_msa(input_msa, sequence_dict, msa_list, logger):
-        return None
+        if not check_msa(input_msa_path, sequence_dict, msa_list, logger):
+            return None
 
-    cleaned_msa_list = clean_msa_to_sto(msa_list, logger)
-    if cleaned_msa_list is None:
-        return None
+        cleaned_msa_list = clean_msa_to_sto(msa_list, logger)
+        if cleaned_msa_list is None:
+            return None
 
-    path_dict = build_batch_output_paths(protein_name=protein_name, msa_name=msa_name, output_dir=output_dir)
+        path_dict = build_batch_output_paths(protein_name=protein_name, msa_name=msa_name or protein_name, output_dir=output_dir)
 
-    if not write_msa(cleaned_msa_list, path_dict["cleaned_sto"], logger):
-        return None
-    logger.print(f"[INFO] Cleaned MSA STO file saved: {path_dict['cleaned_sto']}")
+        if not write_msa(cleaned_msa_list, path_dict["cleaned_sto"], logger):
+            return None
+        logger.print(f"[INFO] Cleaned MSA STO file saved: {path_dict['cleaned_sto']}")
 
-    if not write_hmm(path_dict["cleaned_sto"], path_dict["hmm"], logger):
-        return None
-    logger.print(f"[INFO] HMM Profile file saved: {path_dict['hmm']}")
+        if not write_hmm(path_dict["cleaned_sto"], path_dict["hmm"], logger):
+            return None
+        logger.print(f"[INFO] HMM Profile file saved: {path_dict['hmm']}")
 
-    conservation_scores = compute_conservation_scores(path_dict["hmm"], sequence_dict, logger)
-    if conservation_scores is None:
-        return None
+        conservation_scores = compute_conservation_scores(path_dict["hmm"], sequence_dict, logger)
+        if conservation_scores is None:
+            return None
 
-    conservation_report = generate_conservation_report(conservation_scores)
-    report_dict["enzywizard_conservation"] = conservation_report
+        conservation_report = generate_conservation_report(conservation_scores)
+        report_dict["enzywizard_conservation"] = conservation_report
+    else:
+        logger.print(f"[INFO] No MSA input detected. Conservation calculation skipped: {protein_name}")
 
     logger.print(f"[INFO] Embedding calculation started: {protein_name}")
     embeddings = generate_embedding(sequence_dict, logger, model_name=embedding_model_name)
@@ -434,21 +438,21 @@ def _run_mut_batch_side_workflow(
 def run_mut_batch_workflow(
     wt_cleaned_input_path: str | Path,
     mut_cleaned_input_path: str | Path,
-    wt_input_msa: str | Path,
-    mut_input_msa: str | Path,
+    wt_input_msa: str | Path | None,
+    mut_input_msa: str | Path | None,
     substrate_names: str | None,
     amino_acid_substitution: str,
     wt_protein_name: str,
     mut_protein_name: str,
-    wt_msa_name: str,
-    mut_msa_name: str,
+    wt_msa_name: str | None,
+    mut_msa_name: str | None,
     wt_output_dir: str | Path,
     mut_output_dir: str | Path,
     logger: Logger,
     save_extra_outputs: bool = False,
     cutoff_area: float = 10.0,
     minimize_energy: bool = True,
-    minimization_iteration: int = 1000,
+    minimization_iteration: int = 100,
     energy_force_field_file: str = "charmm36.xml",
     flexibility_cutoff: float = 15.0,
     n_modes: int = 20,
@@ -465,8 +469,8 @@ def run_mut_batch_workflow(
     num_confs: int = 5,
     prune_rms: float = 0.5,
     max_docking_attempt_num: int = 20,
-    early_stop: bool = False,
-    exhaustiveness: int = 16,
+    early_stop: bool = True,
+    exhaustiveness: int = 8,
     cpu: int = 0,
     dock_min_rad: float = 1.8,
     dock_max_rad: float = 6.2,
@@ -490,8 +494,10 @@ def run_mut_batch_workflow(
 ) -> Dict[str, Any] | None:
     wt_cleaned_input_path = Path(wt_cleaned_input_path)
     mut_cleaned_input_path = Path(mut_cleaned_input_path)
-    wt_input_msa = Path(wt_input_msa)
-    mut_input_msa = Path(mut_input_msa)
+    has_wt_msa = wt_input_msa is not None and str(wt_input_msa).strip() != ""
+    has_mut_msa = mut_input_msa is not None and str(mut_input_msa).strip() != ""
+    wt_input_msa_path = Path(wt_input_msa) if has_wt_msa else None
+    mut_input_msa_path = Path(mut_input_msa) if has_mut_msa else None
     wt_output_dir = Path(wt_output_dir)
     mut_output_dir = Path(mut_output_dir)
     has_substrate = isinstance(substrate_names, str) and substrate_names.strip() != ""
@@ -504,12 +510,14 @@ def run_mut_batch_workflow(
 
     try:
         wt_structure = load_protein_structure(wt_cleaned_input_path, wt_protein_name, logger)
-    except Exception:
+    except Exception as e:
+        logger.print(f"[ERROR] Exception while loading WT structure {wt_cleaned_input_path}: {e}")
         wt_structure = None
 
     try:
         mut_structure = load_protein_structure(mut_cleaned_input_path, mut_protein_name, logger)
-    except Exception:
+    except Exception as e:
+        logger.print(f"[ERROR] Exception while loading MUT structure {mut_cleaned_input_path}: {e}")
         mut_structure = None
 
     if wt_structure is None:
@@ -681,7 +689,7 @@ def run_mut_batch_workflow(
     wt_report_dict = _run_mut_batch_side_workflow(
         cleaned_structure=wt_cleaned_structure,
         clean_report=wt_clean_report,
-        input_msa=wt_input_msa,
+        input_msa=wt_input_msa_path,
         protein_name=wt_protein_name,
         msa_name=wt_msa_name,
         output_dir=wt_output_dir,
@@ -737,7 +745,7 @@ def run_mut_batch_workflow(
     mut_report_dict = _run_mut_batch_side_workflow(
         cleaned_structure=mut_cleaned_structure,
         clean_report=mut_clean_report,
-        input_msa=mut_input_msa,
+        input_msa=mut_input_msa_path,
         protein_name=mut_protein_name,
         msa_name=mut_msa_name,
         output_dir=mut_output_dir,
@@ -792,7 +800,7 @@ def run_mut_batch_workflow(
         wt_report_dict = _run_mut_batch_side_workflow(
             cleaned_structure=wt_cleaned_structure,
             clean_report=wt_clean_report,
-            input_msa=wt_input_msa,
+            input_msa=wt_input_msa_path,
             protein_name=wt_protein_name,
             msa_name=wt_msa_name,
             output_dir=wt_output_dir,
@@ -846,7 +854,7 @@ def run_mut_batch_workflow(
         mutclean_report=mutclean_report,
         wt_report_dict=wt_report_dict,
         mut_report_dict=mut_report_dict,
-        strict=effective_has_substrate,
+        strict=effective_has_substrate and has_wt_msa and has_mut_msa,
         logger=logger,
     )
     if mut_integrate_report is None:

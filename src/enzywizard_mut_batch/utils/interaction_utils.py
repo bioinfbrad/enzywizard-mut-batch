@@ -1351,6 +1351,7 @@ def find_disulfide_bond_hits(cys_sg_atoms: List[Dict[str, Any]],ss_max_distance_
 '''
 '''
 
+
 def postprocess_interaction_report_to_schema(raw_report: Dict[str, Any]) -> Dict[str, Any]:
     """
     Postprocess the raw EnzyWizard-Interaction report into the new JSON Schema format.
@@ -1394,14 +1395,7 @@ def postprocess_interaction_report_to_schema(raw_report: Dict[str, Any]) -> Dict
         }
 
     def map_scope_statistics(raw_scope_statistics: Dict[str, Any]) -> Dict[str, Any]:
-        return {
-            "interaction_count": map_interaction_count(
-                raw_scope_statistics.get("count", {})
-            ),
-            "unique_pair_interaction_count": map_interaction_count(
-                raw_scope_statistics.get("unique_pair_count", {})
-            ),
-        }
+        return map_interaction_count(raw_scope_statistics)
 
     molecular_interactions: List[Dict[str, Any]] = []
 

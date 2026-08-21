@@ -45,15 +45,15 @@ from ..utils.IO_utils import load_protein_structure
 
 def run_batch_workflow(
     cleaned_input_path: str | Path,
-    input_msa: str | Path,
+    input_msa: str | Path | None,
     substrate_names: str | None,
     protein_name: str,
-    msa_name: str,
+    msa_name: str | None,
     output_dir: str | Path,
     logger: Logger,
     cutoff_area: float = 10.0,
     minimize_energy: bool = True,
-    minimization_iteration: int = 2000,
+    minimization_iteration: int = 100,
     energy_force_field_file: str = "charmm36.xml",
     flexibility_cutoff: float = 15.0,
     n_modes: int = 20,
@@ -70,8 +70,8 @@ def run_batch_workflow(
     num_confs: int = 5,
     prune_rms: float = 0.5,
     max_docking_attempt_num: int = 20,
-    early_stop: bool = False,
-    exhaustiveness: int = 16,
+    early_stop: bool = True,
+    exhaustiveness: int = 8,
     cpu: int = 0,
     dock_min_rad: float = 1.8,
     dock_max_rad: float = 6.2,
@@ -94,21 +94,24 @@ def run_batch_workflow(
     min_residue_index_gap: int = 3,
 ) -> Dict[str, Any] | None:
     cleaned_input_path = Path(cleaned_input_path)
-    input_msa = Path(input_msa)
+    has_msa = input_msa is not None and str(input_msa).strip() != ""
+    input_msa_path = Path(input_msa) if has_msa else None
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    path_dict = build_batch_output_paths(protein_name=protein_name, msa_name=msa_name, output_dir=output_dir)
+    path_dict = build_batch_output_paths(protein_name=protein_name, msa_name=msa_name or protein_name, output_dir=output_dir)
 
     report_dict: Dict[str, Dict[str, Any]] = {}
 
     has_substrate = isinstance(substrate_names, str) and substrate_names.strip() != ""
+    effective_has_substrate = has_substrate
 
     logger.print("[INFO] Batch workflow started from cleaned input structure")
 
     try:
         original_structure = load_protein_structure(cleaned_input_path, protein_name, logger)
-    except Exception:
+    except Exception as e:
+        logger.print(f"[ERROR] Exception while loading structure {cleaned_input_path}: {e}")
         original_structure = None
 
     if original_structure is None:
@@ -230,32 +233,35 @@ def run_batch_workflow(
         return None
     report_dict["enzywizard_disorder"] = disorder_report
 
-    logger.print("[INFO] Conservation calculation started")
-    msa_list = load_msa(input_msa, logger)
-    if msa_list is None:
-        return None
+    if has_msa:
+        logger.print("[INFO] Conservation calculation started")
+        msa_list = load_msa(input_msa_path, logger)
+        if msa_list is None:
+            return None
 
-    if not check_msa(input_msa, sequence_dict, msa_list, logger):
-        return None
+        if not check_msa(input_msa_path, sequence_dict, msa_list, logger):
+            return None
 
-    cleaned_msa_list = clean_msa_to_sto(msa_list, logger)
-    if cleaned_msa_list is None:
-        return None
+        cleaned_msa_list = clean_msa_to_sto(msa_list, logger)
+        if cleaned_msa_list is None:
+            return None
 
-    if not write_msa(cleaned_msa_list, path_dict["cleaned_sto"], logger):
-        return None
-    logger.print(f"[INFO] Cleaned MSA STO file saved: {path_dict['cleaned_sto']}")
+        if not write_msa(cleaned_msa_list, path_dict["cleaned_sto"], logger):
+            return None
+        logger.print(f"[INFO] Cleaned MSA STO file saved: {path_dict['cleaned_sto']}")
 
-    if not write_hmm(path_dict["cleaned_sto"], path_dict["hmm"], logger):
-        return None
-    logger.print(f"[INFO] HMM Profile file saved: {path_dict['hmm']}")
+        if not write_hmm(path_dict["cleaned_sto"], path_dict["hmm"], logger):
+            return None
+        logger.print(f"[INFO] HMM Profile file saved: {path_dict['hmm']}")
 
-    conservation_scores = compute_conservation_scores(path_dict["hmm"], sequence_dict, logger)
-    if conservation_scores is None:
-        return None
+        conservation_scores = compute_conservation_scores(path_dict["hmm"], sequence_dict, logger)
+        if conservation_scores is None:
+            return None
 
-    conservation_report = generate_conservation_report(conservation_scores)
-    report_dict["enzywizard_conservation"] = conservation_report
+        conservation_report = generate_conservation_report(conservation_scores)
+        report_dict["enzywizard_conservation"] = conservation_report
+    else:
+        logger.print("[INFO] No MSA input detected. Conservation calculation skipped.")
 
     logger.print("[INFO] Embedding calculation started")
     embeddings = generate_embedding(sequence_dict, logger, model_name=embedding_model_name)
@@ -282,20 +288,31 @@ def run_batch_workflow(
     ligand_mol_list = []
     substrate_name_list = []
 
-    if has_substrate:
+    def fallback_to_no_substrate(reason: str) -> None:
+        nonlocal effective_has_substrate
+        logger.print(f"[WARNING] {reason} Falling back to protein-only workflow.")
+        effective_has_substrate = False
+        report_dict.pop("enzywizard_substrate", None)
+        report_dict.pop("enzywizard_dock", None)
+        ligand_mol_list.clear()
+        substrate_name_list.clear()
+
+    if effective_has_substrate:
         logger.print("[INFO] Substrate calculation started")
         substrate_dict_list = get_substrate_dict_list_from_input(substrate_names, logger)
         if substrate_dict_list is None:
-            return None
+            fallback_to_no_substrate("Substrate input parsing failed.")
 
+    if effective_has_substrate:
         substrate_dict_list = get_completed_smiles_list(
             substrate_dict_list,
             logger,
             max_synonyms=max_synonyms,
         )
         if substrate_dict_list is None:
-            return None
+            fallback_to_no_substrate("Substrate SMILES completion failed.")
 
+    if effective_has_substrate:
         substrate_feature_list = get_substrate_feature_list(
             substrate_dict_list,
             logger,
@@ -305,20 +322,24 @@ def run_batch_workflow(
             prune_rms=prune_rms,
         )
         if substrate_feature_list is None:
-            return None
+            fallback_to_no_substrate("Substrate feature or 3D structure generation failed.")
 
+    if effective_has_substrate:
         resolved_substrate_names = ";".join(item["substrate_name"] for item in substrate_dict_list)
 
         if not save_substrate_structures(substrate_feature_list, output_dir, logger):
-            return None
-        logger.print(f"[INFO] Substrate structures saved: {output_dir}")
+            fallback_to_no_substrate("Saving substrate structures failed.")
+        else:
+            logger.print(f"[INFO] Substrate structures saved: {output_dir}")
 
+    if effective_has_substrate:
         substrate_report = generate_substrate_report(substrate_feature_list, logger)
         if substrate_report is None:
-            return None
-        report_dict["enzywizard_substrate"] = substrate_report
+            fallback_to_no_substrate("Substrate report generation failed.")
+        else:
+            report_dict["enzywizard_substrate"] = substrate_report
 
-
+    if effective_has_substrate:
         logger.print("[INFO] Docking workflow started")
         docking_result_list = dock_multiple_substrates_from_structure(
             struct=cleaned_structure,
@@ -337,8 +358,9 @@ def run_batch_workflow(
             manual_box_size_list=dock_box_size_list,
         )
         if docking_result_list is None:
-            return None
+            fallback_to_no_substrate("Docking workflow failed.")
 
+    if effective_has_substrate:
         dock_report = save_docking_results_and_generate_dock_report(
             docking_result_list=docking_result_list,
             struct=cleaned_structure,
@@ -347,9 +369,15 @@ def run_batch_workflow(
             logger=logger,
         )
         if dock_report is None:
-            return None
-        report_dict["enzywizard_dock"] = dock_report
+            fallback_to_no_substrate("Dock report generation failed.")
+        else:
+            report_dict["enzywizard_dock"] = dock_report
 
+    if effective_has_substrate:
+        if len(docking_result_list) == 0:
+            fallback_to_no_substrate("Docking workflow returned no results.")
+
+    if effective_has_substrate:
         docking_result = docking_result_list[0]
 
         for ligand in docking_result["docked_substrate_info_list"]:
@@ -359,7 +387,8 @@ def run_batch_workflow(
 
             original_mol = load_sdf_mol_3d(source_sdf_path, logger)
             if original_mol is None:
-                return None
+                fallback_to_no_substrate("Loading docked substrate source SDF failed.")
+                break
 
             docked_mol = build_docked_mol_from_atom_info(
                 original_mol,
@@ -367,18 +396,21 @@ def run_batch_workflow(
                 logger,
             )
             if docked_mol is None:
-                return None
+                fallback_to_no_substrate("Building docked substrate molecule failed.")
+                break
 
             ligand_mol_list.append(docked_mol)
             substrate_name_list.append(substrate_name)
 
-        logger.print(f"[INFO] Loaded {len(ligand_mol_list)} docked substrate Mol(3D) object(s)")
-    else:
+        if effective_has_substrate:
+            logger.print(f"[INFO] Loaded {len(ligand_mol_list)} docked substrate Mol(3D) object(s)")
+
+    if not effective_has_substrate:
         logger.print("[INFO] No substrate input detected. Skipping substrate and docking workflows.")
 
     logger.print("[INFO] Interaction workflow started")
 
-    if has_substrate:
+    if effective_has_substrate:
         filtered = filter_valid_docked_substrates(
             substrate_name_list=substrate_name_list,
             ligand_mol_list=ligand_mol_list,
@@ -387,10 +419,14 @@ def run_batch_workflow(
             docked_heavy_atom_distance_cutoff_A=docked_heavy_atom_distance_cutoff_A,
         )
         if filtered is None:
-            return None
+            fallback_to_no_substrate("Filtering valid docked substrates failed.")
 
-        valid_substrate_name_list, valid_ligand_mol_list = filtered
-        logger.print(f"[INFO] Valid docked substrate count: {len(valid_ligand_mol_list)}")
+        if effective_has_substrate:
+            valid_substrate_name_list, valid_ligand_mol_list = filtered
+            logger.print(f"[INFO] Valid docked substrate count: {len(valid_ligand_mol_list)}")
+        else:
+            valid_substrate_name_list = []
+            valid_ligand_mol_list = []
     else:
         valid_substrate_name_list = []
         valid_ligand_mol_list = []
@@ -431,7 +467,7 @@ def run_batch_workflow(
     report_dict["enzywizard_interaction"] = interaction_report
 
     logger.print("[INFO] Integrate workflow started")
-    integrate_strict = has_substrate
+    integrate_strict = effective_has_substrate and has_msa
     integrate_report = integrate_reports(report_dict, integrate_strict, logger)
     if integrate_report is None:
         return None
