@@ -29,7 +29,7 @@ setup(
     # Core runtime dependencies based on the tool's functionality
     install_requires=[
         "biopython>=1.86",          # Protein structure I/O, sequence handling
-        "numpy>=1.23.5",            # Numerical operations
+        "numpy>=1.23.5,<2",         # Numerical operations
         "rdkit>=2026.3.1",          # Cheminformatics for substrates
         "openmm>=8.5.0",            # Molecular mechanics (energy, minimization)
         "prody>=2.6.1",             # Elastic network models (flexibility)
